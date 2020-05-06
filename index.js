@@ -1,10 +1,9 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
+const mongoose = require('mongoose');
+// use mongoose to connect with MongoDb
 
-async function main() {
-	// use headless for debugging and to set up the initial scraper
-	const browser = await puppeteer.launch({ headless: true });
-	const page = await browser.newPage();
+async function scrapeListings(page) {
 	await page.goto('https://miami.craigslist.org/d/software-qa-dba-etc/search/sof');
 
 	// grab html using puppeteer
@@ -15,7 +14,7 @@ async function main() {
 	const $ = cheerio.load(html);
 
 	// returning an object with the info i scraped
-	const results = $('.result-info')
+	const listings = $('.result-info')
 		.map((index, element) => {
 			//finding the child element of result-info
 			const titleElement = $(element).find('.result-title');
@@ -35,7 +34,53 @@ async function main() {
 		}) //have to use a .get() function when using a map function in cheerio
 		.get();
 
-	console.log(results);
+	return listings;
+}
+
+async function connectToMongoDb() {
+	//craigslist-user:superstrongpassword Mlab MongoDB
+	await mongoose.connect(
+		'mongodb+srv://craigslist-user:superstrongpassword@cluster0-qa7aw.mongodb.net/test?retryWrites=true&w=majority',
+		{ useUnifiedTopology: true, useNewUrlParser: true }
+	);
+	console.log('connected to mongodb');
+}
+
+async function scrapeJobDescriptions(listings, page) {
+	for (let i = 0; i < listings.length; i++) {
+		// going into each url scraped from the listings
+		await page.goto(listings[i].url);
+		const html = await page.content();
+		const $ = cheerio.load(html);
+		const jobDescription = $('#postingbody').text();
+		const compensation = $('p.attrgroup > span:nth-child(1) > b').text();
+
+		// this adds the text into the object of listings
+		listings[i].jobDescription = jobDescription;
+
+		// this finds the compensation in the listing and adds to the object
+		listings[i].compensation = compensation;
+
+		// 1 second sleep to limit how fast it scrapes
+		await sleep(1000);
+	}
+}
+
+// this sleep function lets us limit the amount of request we make so we don't get blocked
+async function sleep(miliseconds) {
+	return new Promise((resolve) => setTimeout(resolve, miliseconds));
+}
+
+async function main() {
+	await connectToMongoDb();
+
+	// use headless for debugging and to set up the initial scraper
+	const browser = await puppeteer.launch({ headless: false });
+	const page = await browser.newPage();
+	const listings = await scrapeListings(page);
+	const listingsWithJobDescription = await scrapeJobDescriptions(listings, page);
+
+	console.log(listings);
 }
 
 main();
