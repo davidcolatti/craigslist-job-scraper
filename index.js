@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const mongoose = require('mongoose');
+const Listing = require('./model/Listing');
 // use mongoose to connect with MongoDb
 
 async function scrapeListings(page) {
@@ -61,6 +62,10 @@ async function scrapeJobDescriptions(listings, page) {
 		// this finds the compensation in the listing and adds to the object
 		listings[i].compensation = compensation;
 
+		// this saves the listing object in MongoDb as it scrapes
+		const listingModel = new Listing(listings[i]);
+		await listingModel.save();
+
 		// 1 second sleep to limit how fast it scrapes
 		await sleep(1000);
 	}
@@ -75,7 +80,7 @@ async function main() {
 	await connectToMongoDb();
 
 	// use headless for debugging and to set up the initial scraper
-	const browser = await puppeteer.launch({ headless: false });
+	const browser = await puppeteer.launch({ headless: true });
 	const page = await browser.newPage();
 	const listings = await scrapeListings(page);
 	const listingsWithJobDescription = await scrapeJobDescriptions(listings, page);
