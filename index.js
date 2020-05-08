@@ -1,8 +1,10 @@
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
-const mongoose = require('mongoose');
-const Listing = require('./model/Listing');
+// const mongoose = require('mongoose');
+// const Listing = require('./model/Listing');
 // use mongoose to connect with MongoDb
+const ObjectsToCsv = require('objects-to-csv');
+// https://www.npmjs.com/package/objects-to-csv
 
 async function scrapeListings(page) {
 	await page.goto('https://miami.craigslist.org/d/software-qa-dba-etc/search/sof');
@@ -38,14 +40,14 @@ async function scrapeListings(page) {
 	return listings;
 }
 
-async function connectToMongoDb() {
-	//craigslist-user:superstrongpassword Mlab MongoDB
-	await mongoose.connect(
-		'mongodb+srv://craigslist-user:superstrongpassword@cluster0-qa7aw.mongodb.net/test?retryWrites=true&w=majority',
-		{ useUnifiedTopology: true, useNewUrlParser: true }
-	);
-	console.log('connected to mongodb');
-}
+// async function connectToMongoDb() {
+// 	//craigslist-user:superstrongpassword Mlab MongoDB
+// 	await mongoose.connect(
+// 		'mongodb+srv://craigslist-user:superstrongpassword@cluster0-qa7aw.mongodb.net/test?retryWrites=true&w=majority',
+// 		{ useUnifiedTopology: true, useNewUrlParser: true }
+// 	);
+// 	console.log('connected to mongodb');
+// }
 
 async function scrapeJobDescriptions(listings, page) {
 	for (let i = 0; i < listings.length; i++) {
@@ -63,8 +65,8 @@ async function scrapeJobDescriptions(listings, page) {
 		listings[i].compensation = compensation;
 
 		// this saves the listing object in MongoDb as it scrapes
-		const listingModel = new Listing(listings[i]);
-		await listingModel.save();
+		// const listingModel = new Listing(listings[i]);
+		// await listingModel.save();
 
 		// 1 second sleep to limit how fast it scrapes
 		await sleep(1000);
@@ -76,16 +78,24 @@ async function sleep(miliseconds) {
 	return new Promise((resolve) => setTimeout(resolve, miliseconds));
 }
 
+async function createCSVFile(data) {
+	// calling an array of data
+	const csv = new ObjectsToCsv(data);
+
+	// Save to file:
+	await csv.toDisk('./test.csv');
+}
+
 async function main() {
-	await connectToMongoDb();
+	// await connectToMongoDb();
 
 	// use headless for debugging and to set up the initial scraper
-	const browser = await puppeteer.launch({ headless: true });
+	const browser = await puppeteer.launch({ headless: false });
 	const page = await browser.newPage();
 	const listings = await scrapeListings(page);
 	const listingsWithJobDescription = await scrapeJobDescriptions(listings, page);
 
-	console.log(listings);
+	createCSVFile(listings);
 }
 
 main();
